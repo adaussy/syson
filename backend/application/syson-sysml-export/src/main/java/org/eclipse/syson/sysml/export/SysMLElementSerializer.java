@@ -17,37 +17,60 @@ import static com.google.common.base.Strings.nullToEmpty;
 //import static org.eclipse.syson.sysml.export.utils.StringUtils.toPrintableName;
 import static java.util.stream.Collectors.joining;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.syson.sysml.AttributeDefinition;
+import org.eclipse.syson.sysml.AttributeUsage;
 import org.eclipse.syson.sysml.Comment;
 import org.eclipse.syson.sysml.ConjugatedPortDefinition;
+import org.eclipse.syson.sysml.ConjugatedPortTyping;
 import org.eclipse.syson.sysml.Definition;
 import org.eclipse.syson.sysml.Element;
+import org.eclipse.syson.sysml.Feature;
+import org.eclipse.syson.sysml.FeatureReferenceExpression;
+import org.eclipse.syson.sysml.FeatureTyping;
 import org.eclipse.syson.sysml.Import;
 import org.eclipse.syson.sysml.InterfaceDefinition;
 import org.eclipse.syson.sysml.ItemDefinition;
+import org.eclipse.syson.sysml.LiteralBoolean;
+import org.eclipse.syson.sysml.LiteralExpression;
+import org.eclipse.syson.sysml.LiteralInfinity;
+import org.eclipse.syson.sysml.LiteralInteger;
+import org.eclipse.syson.sysml.LiteralRational;
+import org.eclipse.syson.sysml.LiteralString;
 import org.eclipse.syson.sysml.Membership;
 import org.eclipse.syson.sysml.MembershipImport;
 import org.eclipse.syson.sysml.Metaclass;
 import org.eclipse.syson.sysml.MetadataUsage;
+import org.eclipse.syson.sysml.MultiplicityRange;
 import org.eclipse.syson.sysml.Namespace;
 import org.eclipse.syson.sysml.NamespaceImport;
 import org.eclipse.syson.sysml.OccurrenceDefinition;
 import org.eclipse.syson.sysml.OwningMembership;
-import org.eclipse.syson.sysml.Package;
 import org.eclipse.syson.sysml.PartDefinition;
 import org.eclipse.syson.sysml.PortDefinition;
+import org.eclipse.syson.sysml.Redefinition;
+import org.eclipse.syson.sysml.ReferenceSubsetting;
 import org.eclipse.syson.sysml.Subclassification;
+import org.eclipse.syson.sysml.Subsetting;
+import org.eclipse.syson.sysml.Usage;
 import org.eclipse.syson.sysml.VisibilityKind;
 import org.eclipse.syson.sysml.export.utils.Appender;
 import org.eclipse.syson.sysml.export.utils.NameDeresolver;
 import org.eclipse.syson.sysml.helper.EMFUtils;
+import org.eclipse.syson.sysml.helper.LabelConstants;
 import org.eclipse.syson.sysml.util.SysmlSwitch;
+import org.eclipse.syson.sysml.Package;
+
+import reactor.util.function.Tuples;
 
 /**
  * Convert a SysML {@link Element} to its textual representation.
@@ -124,7 +147,169 @@ public class SysMLElementSerializer extends SysmlSwitch<String> {
 
         return builder.toString();
     }
-    
+
+    public String caseLiteralExpression(LiteralExpression expression) {
+        Appender builder = this.newAppender();
+
+        if (expression instanceof LiteralInteger lit) {
+            builder.append(String.valueOf(lit.getValue()));
+        } else if (expression instanceof LiteralString lit) {
+            builder.append(lit.getValue());
+        } else if (expression instanceof LiteralRational lit) {
+            builder.append(String.valueOf(lit.getValue()));
+        } else if (expression instanceof LiteralBoolean lit) {
+            builder.append(String.valueOf(lit.isValue()));
+        } else if (expression instanceof LiteralInfinity lit) {
+            builder.append("*");
+        }
+
+        return builder.toString();
+    }
+
+    @Override
+    public String caseAttributeUsage(AttributeUsage attribute) {
+
+        Appender builder = this.newAppender();
+
+        this.appendUsagePrefix(builder, attribute);
+
+        builder.appendSpaceIfNeeded().append("attribute ");
+
+        this.appendUsageDeclaration(builder, attribute);
+
+        appendOwnedRelationshiptContent(builder, attribute);
+
+        return builder.toString();
+    }
+
+    private void appendFeatureSpecilizationPart(Appender builder, Feature feature) {
+        List<Redefinition> ownedRedefinition = feature.getOwnedRedefinition();
+        appendRedefinition(builder, ownedRedefinition, feature);
+
+        appendReferenceSubsetting(builder, feature.getOwnedReferenceSubsetting(), feature);
+
+        List<Subsetting> ownedSubsetting = new ArrayList<>(feature.getOwnedSubsetting());
+        ownedSubsetting.removeAll(ownedRedefinition);
+        ownedSubsetting.remove(feature.getOwnedReferenceSubsetting());
+
+        appendSubsettings(builder, ownedSubsetting, feature);
+
+        appendFeatureTyping(builder, feature.getOwnedTyping(), feature);
+        this.appendMultiplicityPart(builder, feature);
+    }
+
+    private void appendSubsettings(Appender builder, List<Subsetting> subSettings, Element element) {
+        if (!subSettings.isEmpty()) {
+            builder.appendSpaceIfNeeded().append(LabelConstants.SUBSETTING);
+            builder.appendSpaceIfNeeded().append(subSettings.stream().map(getSubsettedFeature())
+                    .filter(Objects::nonNull)
+                    .map(superFeature -> getDeresolvableName(superFeature, element))
+                    .collect(Collectors.joining(", ")));
+        }
+
+    }
+
+    // TODO : when the function Subsetting::getSubsettedFeature() is correctly implemented then remove this function and
+    // use only Subsetting::getSubsettedFeature() in appendSubsettings();
+    private Function<? super Subsetting, ? extends Feature> getSubsettedFeature() {
+        return subsetting -> {
+            Feature subsettedFeature = subsetting.getSubsettedFeature();
+            if (subsettedFeature != null) {
+                return subsettedFeature;
+            } else {
+                return subsettedFeature;
+            }
+        };
+    }
+
+    private void appendRedefinition(Appender builder, List<Redefinition> redefinitions, Element element) {
+        if (!redefinitions.isEmpty()) {
+            builder.appendSpaceIfNeeded().append(LabelConstants.REDEFINES);
+            builder.appendSpaceIfNeeded().append(redefinitions.stream().map(Redefinition::getRedefinedFeature)
+                    .filter(Objects::nonNull)
+                    .map(superFeature -> getDeresolvableName(superFeature, element))
+                    .collect(Collectors.joining(", ")));
+        }
+
+    }
+
+    private void appendReferenceSubsetting(Appender builder, ReferenceSubsetting ownedReferenceSubsetting, Element element) {
+        if (ownedReferenceSubsetting != null) {
+            builder.appendSpaceIfNeeded().append(LabelConstants.REFERENCES);
+            if (ownedReferenceSubsetting.getReferencedFeature() != null) {
+                builder.appendSpaceIfNeeded().append(getDeresolvableName(ownedReferenceSubsetting.getReferencedFeature(), element));
+            }
+        }
+
+    }
+
+    /**
+     * @param builder
+     * @param ownedTyping
+     * @param element
+     */
+    private void appendFeatureTyping(Appender builder, EList<FeatureTyping> ownedTyping, Element element) {
+        if (!ownedTyping.isEmpty()) {
+            builder.appendSpaceIfNeeded().append(LabelConstants.DEFINED_BY);
+            builder.appendSpaceIfNeeded().append(ownedTyping.stream()
+                    .filter(ft -> ft.getType() != null)
+                    .map(ft -> Tuples.of(ft, ft.getType()))
+                    .filter(t -> t.getT2() != null)
+                    .map(t -> {
+                        String name = getDeresolvableName(t.getT2(), element);
+
+                        if (t.getT1() instanceof ConjugatedPortTyping) {
+                            name = LabelConstants.CONJUGATED + name;
+                        }
+                        return name;
+                    }
+
+                    )
+                    .collect(Collectors.joining(", ")));
+        }
+    }
+
+    private void appendMultiplicityPart(Appender builder, Feature feature) {
+        MultiplicityRange multiplicity = feature.getOwnedElement().stream()
+                .filter(MultiplicityRange.class::isInstance)
+                .map(MultiplicityRange.class::cast)
+                .findFirst()
+                .orElse(null);
+
+        if (multiplicity != null) {
+            String expression = multiplicity.getOwnedElement().stream()
+                    .filter(element -> element instanceof LiteralExpression || element instanceof FeatureReferenceExpression)
+                    .map(element -> {
+                        String exp = null;
+                        if (element instanceof LiteralExpression lit) {
+                            exp = caseLiteralExpression(lit);
+                        } else if (element instanceof FeatureReferenceExpression featureReferenceExp) {
+                            exp = getDeresolvableName(featureReferenceExp, feature);
+                        }
+                        return exp;
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.joining(".."));
+
+            if (!expression.isEmpty()) {
+                builder.appendSpaceIfNeeded().append(LabelConstants.OPEN_BRACKET)
+                        .append(expression)
+                        .append(LabelConstants.CLOSE_BRACKET);
+            }
+
+            boolean isOrdered = multiplicity.isIsOrdered();
+            boolean isUnique = multiplicity.isIsUnique();
+
+            if (isOrdered) {
+                builder.appendSpaceIfNeeded().append("ordered");
+                if (!isUnique) {
+                    builder.appendSpaceIfNeeded().append("nonunique");
+                }
+            }
+        }
+
+    }
+
     @Override
     public String caseConjugatedPortDefinition(ConjugatedPortDefinition object) {
         // Conjugated port definition are implicit
@@ -177,6 +362,12 @@ public class SysMLElementSerializer extends SysmlSwitch<String> {
         }
     }
 
+    private void appendUsageDeclaration(Appender builder, Usage usage) {
+        appendNameWithShortName(builder, usage);
+
+        appendFeatureSpecilizationPart(builder, usage);
+    }
+
     /**
      * Get a deresolvable name for a given element in a given context
      * 
@@ -206,6 +397,35 @@ public class SysMLElementSerializer extends SysmlSwitch<String> {
         }
 
         appendDefinitionExtensionKeyword(builder, def);
+    }
+
+    private void appendUsagePrefix(Appender builder, Usage usage) {
+
+        getBasicUsagePrefix(builder, usage);
+
+        final String isRef;
+        if (usage.isIsReference()) {
+            isRef = "ref";
+        } else {
+            isRef = "";
+        }
+
+        builder.appendSpaceIfNeeded().append(isRef);
+
+        appendUsageExtensionKeyword(builder, usage);
+    }
+
+    private void appendUsageExtensionKeyword(Appender builder, Usage usage) {
+        for (var rel : usage.getOwnedRelationship()) {
+            if (rel instanceof OwningMembership owningMember) {
+                owningMember.getOwnedRelatedElement().stream()
+                        .filter(MetadataUsage.class::isInstance)
+                        .map(MetadataUsage.class::cast)
+                        .map(MetadataUsage::getMetadataDefinition)
+                        .filter(NOT_NULL)
+                        .forEach(mDef -> appendPrefixMetadataMember(builder, mDef));
+            }
+        }
     }
 
     private void appendDefinitionExtensionKeyword(Appender builder, Definition def) {
@@ -239,18 +459,41 @@ public class SysMLElementSerializer extends SysmlSwitch<String> {
         }
     }
 
-    private String getBasicDefinitionPrefix(Definition occDef) {
+    private String getBasicDefinitionPrefix(Definition def) {
         StringBuilder builder = new StringBuilder();
-        if (occDef.isIsAbstract()) {
+        if (def.isIsAbstract()) {
             builder.append("abstract");
         }
-        if (occDef.isIsVariation()) {
+        if (def.isIsVariation()) {
             if (!builder.isEmpty()) {
                 builder.append(" ");
             }
             builder.append("variation");
         }
         return builder.toString();
+    }
+
+    private void getBasicUsagePrefix(Appender builder, Usage usage) {
+        if (usage.isIsAbstract()) {
+            builder.appendSpaceIfNeeded();
+            builder.append("abstract");
+        }
+        if (usage.isIsVariation()) {
+            builder.appendSpaceIfNeeded();
+            builder.append("variation");
+        }
+        if (usage.isIsReadOnly()) {
+            builder.appendSpaceIfNeeded();
+            builder.append("readonly");
+        }
+        if (usage.isIsDerived()) {
+            builder.appendSpaceIfNeeded();
+            builder.append("derived");
+        }
+        if (usage.isIsEnd()) {
+            builder.appendSpaceIfNeeded();
+            builder.append("end");
+        }
     }
 
     private Appender newAppender() {

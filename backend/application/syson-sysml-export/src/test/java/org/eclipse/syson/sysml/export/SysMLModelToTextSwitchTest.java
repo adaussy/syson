@@ -16,22 +16,34 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.eclipse.syson.sysml.Annotation;
 import org.eclipse.syson.sysml.AttributeDefinition;
+import org.eclipse.syson.sysml.AttributeUsage;
 import org.eclipse.syson.sysml.Comment;
 import org.eclipse.syson.sysml.ConjugatedPortDefinition;
 import org.eclipse.syson.sysml.Definition;
+import org.eclipse.syson.sysml.DataType;
 import org.eclipse.syson.sysml.Element;
+import org.eclipse.syson.sysml.Feature;
 import org.eclipse.syson.sysml.FeatureTyping;
 import org.eclipse.syson.sysml.InterfaceDefinition;
 import org.eclipse.syson.sysml.ItemDefinition;
+import org.eclipse.syson.sysml.LiteralBoolean;
+import org.eclipse.syson.sysml.LiteralInfinity;
+import org.eclipse.syson.sysml.LiteralInteger;
+import org.eclipse.syson.sysml.LiteralRational;
+import org.eclipse.syson.sysml.LiteralString;
 import org.eclipse.syson.sysml.Membership;
 import org.eclipse.syson.sysml.MembershipImport;
 import org.eclipse.syson.sysml.MetadataDefinition;
 import org.eclipse.syson.sysml.MetadataUsage;
+import org.eclipse.syson.sysml.MultiplicityRange;
 import org.eclipse.syson.sysml.NamespaceImport;
 import org.eclipse.syson.sysml.OwningMembership;
 import org.eclipse.syson.sysml.Package;
 import org.eclipse.syson.sysml.PartDefinition;
 import org.eclipse.syson.sysml.PortDefinition;
+import org.eclipse.syson.sysml.Redefinition;
+import org.eclipse.syson.sysml.ReferenceSubsetting;
+import org.eclipse.syson.sysml.Subsetting;
 import org.eclipse.syson.sysml.SysmlFactory;
 import org.eclipse.syson.sysml.VisibilityKind;
 import org.eclipse.syson.sysml.export.utils.NameDeresolver;
@@ -49,6 +61,12 @@ public class SysMLModelToTextSwitchTest {
     private static final String PACKAGE_2 = "Package 2";
 
     private static final String PACKAGE1 = "Package1";
+    
+    private static final String ATTRIBUTE1 = "attribute1";
+    
+    private static final String SUBSETTING1 = "sub1";
+    
+    private static final String SUBSETTING2 = "sub2";
 
     private ModelBuilder builder = new ModelBuilder();
 
@@ -590,6 +608,238 @@ public class SysMLModelToTextSwitchTest {
     private void assertTextualFormEquals(String extexted, Element elementToTest) {
         String content = convertToText(elementToTest);
         assertEquals(extexted, content);
+    }
+    
+    @Test
+    public void attributeUsage() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+
+        assertTextualFormEquals("ref attribute attribute1;", attributeUsage);
+    }
+    
+    @Test
+    public void abstractAttributeUsage() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+        attributeUsage.setIsAbstract(true);
+
+        assertTextualFormEquals("abstract ref attribute attribute1;", attributeUsage);
+    }
+    
+    @Test
+    public void variationAttributeUsage() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+        attributeUsage.setIsVariation(true);
+
+        assertTextualFormEquals("variation ref attribute attribute1;", attributeUsage);
+    }
+    
+    @Test
+    public void readonlyAttributeUsage() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+        attributeUsage.setIsReadOnly(true);
+
+        assertTextualFormEquals("readonly ref attribute attribute1;", attributeUsage);
+    }
+    
+    @Test
+    public void derivedAttributeUsage() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+        attributeUsage.setIsDerived(true);
+
+        assertTextualFormEquals("derived ref attribute attribute1;", attributeUsage);
+    }
+    
+    @Test
+    public void endAttributeUsage() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+        attributeUsage.setIsEnd(true);
+
+        assertTextualFormEquals("end ref attribute attribute1;", attributeUsage);
+    }
+    
+    @Test
+    public void allPrefixesAttributeUsage() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+        attributeUsage.setIsEnd(true);
+        attributeUsage.setIsDerived(true);
+        attributeUsage.setIsReadOnly(true);
+        attributeUsage.setIsVariation(true);
+        attributeUsage.setIsAbstract(true);
+
+        assertTextualFormEquals("abstract variation readonly derived end ref attribute attribute1;", attributeUsage);
+    }
+    
+    @Test
+    public void attributeUsageWithSubsetting() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+                
+        Subsetting subsetting = builder.createIn(Subsetting.class, attributeUsage);
+        
+        Feature feature = builder.createWithName(Feature.class, SUBSETTING1);
+        subsetting.setSubsettedFeature(feature);
+
+        assertTextualFormEquals("ref attribute attribute1 :> sub1;", attributeUsage);
+    }
+    
+    @Test
+    public void attributeUsageWithMultipleSubsetting() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+                
+        Subsetting subsetting = builder.createIn(Subsetting.class, attributeUsage);
+        Subsetting subsetting1 = builder.createIn(Subsetting.class, attributeUsage);
+        
+        Feature feature = builder.createWithName(Feature.class, SUBSETTING1);
+        subsetting.setSubsettedFeature(feature);
+        
+        Feature feature1 = builder.createWithName(Feature.class, SUBSETTING2);
+        subsetting1.setSubsettedFeature(feature1);
+
+        assertTextualFormEquals("ref attribute attribute1 :> sub1, sub2;", attributeUsage);
+    }
+    
+    @Test
+    public void attributeUsageWithSubsettingAndMultiplicity() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+                
+        Subsetting subsetting = builder.createIn(Subsetting.class, attributeUsage);
+        
+        Feature feature = builder.createWithName(Feature.class, SUBSETTING1);
+        subsetting.setSubsettedFeature(feature);
+        
+        MultiplicityRange multiplicity = builder.createIn(MultiplicityRange.class, attributeUsage);
+        LiteralInteger literal = builder.createIn(LiteralInteger.class, multiplicity);
+        literal.setValue(1);
+
+        assertTextualFormEquals("ref attribute attribute1 :> sub1 [1];", attributeUsage);
+    }
+    
+    @Test
+    public void attributeUsageWithSubsettingAndOrderedNonUniqueMultiplicity() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+                
+        Subsetting subsetting = builder.createIn(Subsetting.class, attributeUsage);
+        
+        Feature feature = builder.createWithName(Feature.class, SUBSETTING1);
+        subsetting.setSubsettedFeature(feature);
+        
+        MultiplicityRange multiplicity = builder.createIn(MultiplicityRange.class, attributeUsage);
+        multiplicity.setIsUnique(false);
+        multiplicity.setIsOrdered(true);
+        LiteralInteger literal = builder.createIn(LiteralInteger.class, multiplicity);
+        literal.setValue(1);
+
+        assertTextualFormEquals("ref attribute attribute1 :> sub1 [1] ordered nonunique;", attributeUsage);
+    }
+    
+    @Test
+    public void attributeUsageWithSubsettingAndMultiplicityRange() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+                
+        Subsetting subsetting = builder.createIn(Subsetting.class, attributeUsage);
+        
+        Feature feature = builder.createWithName(Feature.class, SUBSETTING1);
+        subsetting.setSubsettedFeature(feature);
+        
+        MultiplicityRange multiplicity = builder.createIn(MultiplicityRange.class, attributeUsage);
+        LiteralInteger literal = builder.createIn(LiteralInteger.class, multiplicity);
+        literal.setValue(1);
+        builder.createIn(LiteralInfinity.class, multiplicity);
+
+        assertTextualFormEquals("ref attribute attribute1 :> sub1 [1..*];", attributeUsage);
+    }
+    
+    @Test
+    public void attributeUsageWithRedefinition() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+        
+        Redefinition redefinition = builder.createIn(Redefinition.class, attributeUsage);
+        
+        Feature feature = builder.createWithName(Feature.class, "redefinition1");
+        redefinition.setRedefinedFeature(feature);
+
+        assertTextualFormEquals("ref attribute attribute1 :>> redefinition1;", attributeUsage);
+    }
+    
+    @Test
+    public void attributeUsageWithMultipleRedefinition() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+        
+        Redefinition redefinition = builder.createIn(Redefinition.class, attributeUsage);
+        Redefinition redefinition1 = builder.createIn(Redefinition.class, attributeUsage);
+        
+        Feature feature = builder.createWithName(Feature.class, "redefinition1");
+        redefinition.setRedefinedFeature(feature);
+        
+        Feature feature1 = builder.createWithName(Feature.class, "redefinition2");
+        redefinition1.setRedefinedFeature(feature1);
+
+        assertTextualFormEquals("ref attribute attribute1 :>> redefinition1, redefinition2;", attributeUsage);
+    }
+    
+    @Test
+    public void attributeUsageWithReferenceSubsetting() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+        
+        ReferenceSubsetting ref = builder.createIn(ReferenceSubsetting.class, attributeUsage);
+        
+        Feature feature = builder.createWithName(Feature.class, "refSubset1");
+        ref.setReferencedFeature(feature);
+
+        assertTextualFormEquals("ref attribute attribute1 ::> refSubset1;", attributeUsage);
+    }
+    
+    @Test
+    public void attributeUsageWithFeatureTyping() {
+        AttributeUsage attributeUsage = builder.createWithName(AttributeUsage.class, ATTRIBUTE1);
+        
+        FeatureTyping typing = builder.createIn(FeatureTyping.class, attributeUsage);
+        
+        DataType dataType = builder.createWithName(DataType.class, "type1");
+        typing.setType(dataType);
+        typing.setTypedFeature(attributeUsage);
+        typing.setSpecific(attributeUsage);
+        typing.setGeneral(dataType);
+
+        assertTextualFormEquals("ref attribute attribute1 : type1;", attributeUsage);
+    }
+    
+    @Test
+    public void literalInteger() {
+        LiteralInteger literalInteger = SysmlFactory.eINSTANCE.createLiteralInteger();
+        literalInteger.setValue(1);
+
+        assertTextualFormEquals("1", literalInteger);
+    }
+    
+    @Test
+    public void literalString() {
+        LiteralString literalStr = SysmlFactory.eINSTANCE.createLiteralString();
+        literalStr.setValue("value");
+
+        assertTextualFormEquals("value", literalStr);
+    }
+    
+    @Test
+    public void literalRational() {
+        LiteralRational literalRat = SysmlFactory.eINSTANCE.createLiteralRational();
+        literalRat.setValue(1.5);
+
+        assertTextualFormEquals("1.5", literalRat);
+    }
+    
+    @Test
+    public void literalBoolean() {
+        LiteralBoolean literalBool = SysmlFactory.eINSTANCE.createLiteralBoolean();
+        literalBool.setValue(true);
+
+        assertTextualFormEquals("true", literalBool);
+    }
+    
+    @Test
+    public void literalInfinity() {
+        LiteralInfinity literalInf = SysmlFactory.eINSTANCE.createLiteralInfinity();
+
+        assertTextualFormEquals("*", literalInf);
     }
 
 }
