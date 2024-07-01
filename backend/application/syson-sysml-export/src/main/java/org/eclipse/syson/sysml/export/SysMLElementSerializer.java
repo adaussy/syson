@@ -59,7 +59,6 @@ import org.eclipse.syson.sysml.Expression;
 import org.eclipse.syson.sysml.Feature;
 import org.eclipse.syson.sysml.FeatureChainExpression;
 import org.eclipse.syson.sysml.FeatureChaining;
-import org.eclipse.syson.sysml.FeatureDirectionKind;
 import org.eclipse.syson.sysml.FeatureMembership;
 import org.eclipse.syson.sysml.FeatureReferenceExpression;
 import org.eclipse.syson.sysml.FeatureTyping;
@@ -68,6 +67,7 @@ import org.eclipse.syson.sysml.Import;
 import org.eclipse.syson.sysml.InterfaceDefinition;
 import org.eclipse.syson.sysml.InvocationExpression;
 import org.eclipse.syson.sysml.ItemDefinition;
+import org.eclipse.syson.sysml.ItemUsage;
 import org.eclipse.syson.sysml.LiteralBoolean;
 import org.eclipse.syson.sysml.LiteralExpression;
 import org.eclipse.syson.sysml.LiteralInfinity;
@@ -214,6 +214,20 @@ public class SysMLElementSerializer extends SysmlSwitch<String> {
     @Override
     public String caseItemDefinition(ItemDefinition itemDef) {
         return this.appendDefaultDefinition(this.newAppender(), itemDef).toString();
+    }
+
+    @Override
+    public String caseItemUsage(ItemUsage itemUsage) {
+
+        Appender builder = this.newAppender();
+
+        appendOccurrenceUsagePrefix(builder, itemUsage);
+
+        builder.appendWithSpaceIfNeeded("item");
+
+        appendUsage(builder, itemUsage);
+
+        return builder.toString();
     }
 
     @Override
@@ -1550,7 +1564,7 @@ public class SysMLElementSerializer extends SysmlSwitch<String> {
 
     private void appendBasicUsagePrefix(Appender builder, Usage usage) {
 
-        if (usage.getDirection() != FeatureDirectionKind.IN) {
+        if (usage.getDirection() != null) {
             builder.appendWithSpaceIfNeeded(usage.getDirection().toString());
         }
 
@@ -1799,7 +1813,7 @@ public class SysMLElementSerializer extends SysmlSwitch<String> {
 
     private void appendInterfaceEndPortUsage(Appender builder, PortUsage portUsage) {
 
-        if (portUsage.getDirection() != FeatureDirectionKind.IN) {
+        if (portUsage.getDirection() != null) {
             builder.appendWithSpaceIfNeeded(portUsage.getDirection().toString());
         }
 
